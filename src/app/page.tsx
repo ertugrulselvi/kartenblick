@@ -32,7 +32,8 @@ const benefits = [
 ];
 
 export default function Home() {
-  const picker = useRef<HTMLInputElement>(null);
+  const cameraPicker = useRef<HTMLInputElement>(null);
+  const galleryPicker = useRef<HTMLInputElement>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
 
@@ -96,7 +97,7 @@ export default function Home() {
           <p className="eyebrow">Für Trades · Binder · Flohmarkt</p>
           <h1>Deine Karten.<br /><em>Dein Tauschwert.</em></h1>
           <p className="hero-text">CM-Preise, Last Sold und Tauschwert auf einen Blick. Damit du weißt, ob dein Deal unter CM liegt.</p>
-          <button className="text-link" type="button" onClick={() => picker.current?.click()}>
+          <button className="text-link" type="button" onClick={() => cameraPicker.current?.click()}>
             Jetzt Karte scannen <span>↗</span>
           </button>
         </div>
@@ -110,10 +111,11 @@ export default function Home() {
       <section className="scanner-section" id="scanner">
         <div className="section-heading"><p className="eyebrow">MVP · Scan starten</p><h2>Ist dein Trade<br />unter CM?</h2><p>Scanne eine Karte und prüfe CM-Preise, Last Sold und deinen möglichen Tauschwert.</p></div>
         <div className="scanner-panel">
-          <input ref={picker} className="visually-hidden" type="file" accept="image/*" capture="environment" multiple onChange={onInput} />
+          <input ref={cameraPicker} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={onInput} />
+          <input ref={galleryPicker} className="visually-hidden" type="file" accept="image/*" multiple onChange={onInput} />
           <div className={`dropzone ${dragging ? "is-dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}>
-            <div className="scan-icon" aria-hidden="true"><span /></div><h3>Foto hier ablegen</h3><p>oder nimm eines mit der Kamera auf</p>
-            <button className="primary-button" type="button" onClick={() => picker.current?.click()}>Foto auswählen</button><small>JPG, PNG oder HEIC · maximal 50 Bilder</small>
+            <div className="scan-icon" aria-hidden="true"><span /></div><h3>Direkt Karte scannen</h3><p>Öffnet die Rückkamera – halte Name und Kartennummer ins Bild.</p>
+            <div className="scan-actions"><button className="primary-button" type="button" onClick={() => cameraPicker.current?.click()}>Kamera öffnen</button><button className="secondary-button" type="button" onClick={() => galleryPicker.current?.click()}>Aus Galerie</button></div><small>Kamera: eine Karte · Galerie: bis zu 50 Bilder</small>
           </div>
           {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Scan" : "Scans"}</b><span>Erkennung läuft direkt auf deinem Bild</span></div><div className="scan-list">{uploads.map((upload) => <article className={`scan-result scan-${upload.status}`} key={upload.id}><div className="scan-preview"><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></div><div className="scan-content"><p className="scan-state">{upload.status === "reading" ? `Scan läuft${upload.progress ? ` · ${upload.progress}%` : ""}` : upload.status === "review" ? "Treffer prüfen" : upload.status === "confirmed" ? "Karte bestätigt" : "Scan braucht Hilfe"}</p><p className="scan-message">{upload.message}</p>{upload.hints && <p className="scan-hints">Gelesen: {upload.hints.name ?? "Name unklar"}{upload.hints.number ? ` · ${upload.hints.number}` : ""}</p>}{upload.status === "review" && <div className="candidate-list">{upload.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => updateUpload(upload.id, { status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` })}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{upload.status === "confirmed" && upload.selected && <div className="confirmed-card"><img src={upload.selected.image} alt="" /><span><b>{upload.selected.name}</b><small>{upload.selected.setName} · {upload.selected.number}{upload.selected.setTotal ? `/${upload.selected.setTotal}` : ""}</small></span></div>}</div></article>)}</div></div>}
         </div>
