@@ -32,12 +32,13 @@ function cleanLine(line: string) {
 
 function extractHints(text: string) {
   const numberMatch = text.match(/\b(\d{1,3})\s*\/\s*(\d{1,3})\b/);
-  const number = numberMatch ? `${numberMatch[1]}/${numberMatch[2]}` : undefined;
+  const promoMatch = text.match(/\b(?:(?:promo|promokarte|promotional|svp|s-p)\s*(\d{1,4})|(\d{1,4})\s*(?:promo|promokarte|promotional|svp|s-p))\b/i);
+  const number = numberMatch ? `${numberMatch[1]}/${numberMatch[2]}` : promoMatch?.[1] ?? promoMatch?.[2];
   const names = text.split(/\r?\n/).map(cleanLine).filter((line) => {
     const letters = line.replace(/[^a-zA-ZÀ-ÿ]/g, "");
     return letters.length >= 3 && letters.length <= 28 && !IGNORED_LINES.has(line.toUpperCase()) && !/^\d/.test(line);
   }).filter((line, index, all) => all.findIndex((item) => item.toLowerCase() === line.toLowerCase()) === index).slice(0, 8);
-  return { number, names };
+  return { number, names, isPromo: Boolean(promoMatch) };
 }
 
 function escapeQuery(value: string) {

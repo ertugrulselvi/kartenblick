@@ -164,7 +164,7 @@ export default function Home() {
 
   async function searchCatalog(text: string) {
     const response = await fetch("/api/cards/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-    const data = await response.json() as { candidates?: CardCandidate[]; hints?: { number?: string; names?: string[] }; error?: string };
+    const data = await response.json() as { candidates?: CardCandidate[]; hints?: { number?: string; names?: string[]; isPromo?: boolean }; error?: string };
     if (!response.ok) throw new Error(data.error ?? "Die Katalogsuche konnte nicht gestartet werden.");
     return data;
   }
@@ -244,7 +244,7 @@ export default function Home() {
       let data = await searchCatalog(normalized);
       if ((data.candidates?.length ?? 0) === 0 && normalized !== query) data = await searchCatalog(query);
       const candidates = data.candidates ?? [];
-      setCatalogSearch(candidates.length > 0 ? { status: "review", query, normalized, candidates, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", query, normalized, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Kein eindeutiger Treffer. Prüfe Kartenname und Kartennummer." });
+      setCatalogSearch(candidates.length > 0 ? { status: "review", query, normalized, candidates, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", query, normalized, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: data.hints?.isPromo ? "Name und Promo-Nummer wurden erkannt, aber diese Promo ist im aktuellen Katalog nicht enthalten." : "Kein eindeutiger Treffer. Prüfe Kartenname und Kartennummer." });
     } catch (error) {
       setCatalogSearch({ status: "error", query, normalized, message: error instanceof Error ? error.message : "Die Katalogsuche ist fehlgeschlagen." });
     }
@@ -286,7 +286,7 @@ export default function Home() {
             if ((result.candidates?.length ?? 0) > 0) break;
           }
           const candidates = data?.candidates ?? [];
-          setVoiceSearch(candidates.length > 0 ? { status: "review", transcript, normalized: attempts[0], candidates, hints: { name: data?.hints?.names?.[0], number: data?.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", transcript, normalized: attempts[0], message: "Kein eindeutiger Treffer. Sage Name und Kartennummer noch einmal deutlich." });
+          setVoiceSearch(candidates.length > 0 ? { status: "review", transcript, normalized: attempts[0], candidates, hints: { name: data?.hints?.names?.[0], number: data?.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", transcript, normalized: attempts[0], message: data?.hints?.isPromo ? "Name und Promo-Nummer wurden erkannt, aber diese Promo ist im aktuellen Katalog nicht enthalten." : "Kein eindeutiger Treffer. Sage Name und Kartennummer noch einmal deutlich." });
         } catch (error) {
           setVoiceSearch({ status: "error", transcript, normalized: attempts[0], message: error instanceof Error ? error.message : "Die Katalogsuche ist fehlgeschlagen." });
         }
