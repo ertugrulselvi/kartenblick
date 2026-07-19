@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useRef, useState } from "react";
+import Image from "next/image";
 
 type Upload = { id: string; name: string; preview: string };
 
@@ -32,7 +33,7 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#oben" aria-label="Kartenblick Startseite"><span className="brand-mark">K</span><span>kartenblick</span></a>
+        <a className="brand" href="#oben" aria-label="Valoreon Startseite"><span className="brand-mark">V</span><span>valoreon</span></a>
         <nav aria-label="Hauptnavigation"><a href="#so-funktionierts">So funktioniert&apos;s</a><a href="#ueber">Über Kartenblick</a></nav>
       </header>
 
@@ -45,10 +46,9 @@ export default function Home() {
             Jetzt Karte scannen <span>↗</span>
           </button>
         </div>
-        <div className="hero-art" aria-label="Stilisierte Pokémon-Karte">
-          <div className="orb orb-one" /><div className="orb orb-two" />
-          <div className="showcase-card"><div className="card-topline"><span>FLAMMARA</span><span>HP 130</span></div><div className="card-illustration"><span>✦</span></div><div className="card-copy"><b>Feueratem</b><small>130</small></div><div className="card-number">136/165 · DE</div></div>
-          <p className="floating-label">Name · Set · Nummer · Variante</p>
+        <div className="hero-art">
+          <Image className="sigil" src="/brand/valoreon-sigil-comic-gold.png" alt="Valoreon V-Sigil" width={1024} height={1536} priority />
+          <p className="floating-label">CM · Last Sold · Tauschwert</p>
         </div>
       </section>
 
@@ -66,7 +66,7 @@ export default function Home() {
 
       <section className="how-it-works" id="so-funktionierts"><p className="eyebrow">Einfacher Ablauf</p><div className="steps">{benefits.map(([number, title, text]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
       <section className="price-note" id="ueber"><p className="eyebrow">CM ist die Basis</p><h2>Nicht nur CM.<br /><em>Dein Tauschwert.</em></h2><p>Kartenblick zeigt CM-Preise, Last Sold, Quelle, Abrufzeit, Sprache und Variante. So erkennst du faire Trades und Angebote unter CM.</p></section>
-      <footer><a className="brand" href="#oben"><span className="brand-mark">K</span><span>kartenblick</span></a><span>© 2026 Kartenblick · MVP</span></footer>
+      <footer><a className="brand" href="#oben"><span className="brand-mark">V</span><span>valoreon</span></a><span>© 2026 Valoreon · MVP</span></footer>
     </main>
   );
 }
