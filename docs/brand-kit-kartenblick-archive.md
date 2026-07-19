@@ -1,6 +1,6 @@
 # Kartenblick – archiviertes Brand Kit
 
-Stand: Juli 2026 · ersetzt durch `docs/brand-kit.md` (Valoreon)
+Stand: Juli 2026 · als aktive Designrichtung mit der Wortmarke **Valoreon** reaktiviert
 
 ## Charakter
 
@@ -24,4 +24,4 @@ Energetisches, poppiges TCG-Design mit Comic-Karten-Ästhetik. Der Stil sollte s
 - große Versalien und verspielte Card-Mockups
 - auffällige, abgerundete CTA-Buttons
 
-Dieser Stand bleibt als nachvollziehbare visuelle Referenz erhalten und wird nicht mehr aktiv eingesetzt.
+Dieser Stand ist wieder die aktive visuelle Referenz. Nur der frühere Name Kartenblick wird durch **Valoreon** ersetzt.

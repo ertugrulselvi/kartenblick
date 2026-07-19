@@ -1,8 +1,10 @@
 # Valoreon – Brand Kit
 
-Arbeitsstand: Juli 2026  
+Arbeitsstand: Juli 2026 · aktuell pausierte Designrichtung  
 Projektordner: `kartenblick`  
 Markenname: **Valoreon** (vor Verwendung noch Domain- und Markenrecherche durchführen)
+
+Hinweis: Der Name Valoreon bleibt aktiv, die Navy-/Gold-Richtung wird im Moment jedoch nicht auf der Landingpage verwendet.
 
 ## Markenidee
 

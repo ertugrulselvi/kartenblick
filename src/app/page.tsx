@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, useRef, useState } from "react";
-import Image from "next/image";
 
 type Upload = { id: string; name: string; preview: string };
 
@@ -46,8 +45,9 @@ export default function Home() {
             Jetzt Karte scannen <span>↗</span>
           </button>
         </div>
-        <div className="hero-art">
-          <Image className="sigil" src="/brand/valoreon-sigil-comic-gold.png" alt="Valoreon V-Sigil" width={1024} height={1536} priority />
+        <div className="hero-art" aria-label="Stilisierte Sammelkarte">
+          <div className="orb orb-one" /><div className="orb orb-two" />
+          <div className="showcase-card"><div className="card-topline"><span>FLAMMARA</span><span>HP 130</span></div><div className="card-illustration"><span>✦</span></div><div className="card-copy"><b>Feueratem</b><small>130</small></div><div className="card-number">136/165 · DE</div></div>
           <p className="floating-label">CM · Last Sold · Tauschwert</p>
         </div>
       </section>
