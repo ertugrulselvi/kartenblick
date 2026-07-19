@@ -2,7 +2,7 @@
 
 Geplanter Ablauf:
 
-1. Bild zuschneiden, Perspektive korrigieren und Spiegelungen reduzieren.
+1. Das Foto wird für den MVP in zwei Zonen zerlegt: Kartename im oberen Bereich und Kartennummer im unteren Bereich. Bei einem quer aufgenommenen Bild fällt die Erkennung auf das Gesamtbild zurück.
 2. OCR liest Kartenname und Kartennummer direkt im Browser. Das Bild wird dafür nicht an Valoreon hochgeladen.
 3. Eine serverseitige Suche in der Pokémon-TCG-API grenzt bis zu drei Treffer ein; Kartennummer hat Vorrang vor dem Namen.
 4. Die Person bestätigt einen Treffer bewusst, bevor die Karte als erkannt gilt.
