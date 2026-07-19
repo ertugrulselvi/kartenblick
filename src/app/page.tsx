@@ -25,28 +25,15 @@ type Upload = {
   message?: string;
 };
 
-type VoiceScan = {
-  transcript: string;
+type CatalogSearch = {
+  query: string;
   normalized?: string;
-  status: "listening" | "searching" | "review" | "confirmed" | "error";
+  status: "searching" | "review" | "confirmed" | "error";
   candidates?: CardCandidate[];
   hints?: { name?: string; number?: string };
   selected?: CardCandidate;
   message: string;
 };
-
-type VoiceRecognition = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  start: () => void;
-  onstart: (() => void) | null;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-};
-
-type VoiceRecognitionConstructor = new () => VoiceRecognition;
 
 const benefits = [
   ["01", "CM-Preis checken", "Low, Trend und Variante als Basis für deinen Trade."],
@@ -54,7 +41,7 @@ const benefits = [
   ["03", "Tauschwert einschätzen", "Erkenne schnell, ob ein Angebot unter CM liegt."],
 ];
 
-const POKEMON_VOICE_TERMS: Record<string, string> = {
+const POKEMON_CATALOG_TERMS: Record<string, string> = {
   bisaflor: "Venusaur", dragoran: "Dragonite", evoli: "Eevee", garados: "Gyarados", gengar: "Gengar", glurak: "Charizard", glurack: "Charizard", guardevoir: "Gardevoir", koraidon: "Koraidon", lucario: "Lucario", miraidon: "Miraidon", mewtu: "Mewtwo", pikachu: "Pikachu", rayquaza: "Rayquaza", turtok: "Blastoise",
 };
 
@@ -81,14 +68,14 @@ function germanNumber(value: string): number | undefined {
   return undefined;
 }
 
-function normalizeVoiceTranscript(transcript: string) {
-  let normalized = transcript.toLowerCase();
+function normalizeCatalogQuery(query: string) {
+  let normalized = query.toLowerCase();
   normalized = normalized.replace(/\b([a-zäöüß0-9]+)\s+von\s+([a-zäöüß0-9]+)\b/gi, (whole, numerator, denominator) => {
     const top = germanNumber(numerator);
     const bottom = germanNumber(denominator);
     return top !== undefined && bottom !== undefined ? `\n${top}/${bottom}\n` : whole;
   });
-  for (const [spoken, catalogName] of Object.entries(POKEMON_VOICE_TERMS)) {
+  for (const [spoken, catalogName] of Object.entries(POKEMON_CATALOG_TERMS)) {
     normalized = normalized.replace(new RegExp(`\\b${spoken}\\b`, "gi"), `\n${catalogName}\n`);
   }
   return normalized.replace(/\s*\/\s*/g, "/").replace(/\n{2,}/g, "\n").trim();
@@ -128,7 +115,8 @@ export default function Home() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
-  const [voiceScan, setVoiceScan] = useState<VoiceScan | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState<CatalogSearch | null>(null);
 
   function updateUpload(id: string, changes: Partial<Upload>) {
     setUploads((current) => current.map((upload) => upload.id === id ? { ...upload, ...changes } : upload));
@@ -204,41 +192,22 @@ export default function Home() {
     setScanNotice("Kamera geöffnet – nach dem Foto startet die Erkennung automatisch.");
   }
 
-  function startVoiceScan() {
-    const speechWindow = window as typeof window & { SpeechRecognition?: VoiceRecognitionConstructor; webkitSpeechRecognition?: VoiceRecognitionConstructor };
-    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      setVoiceScan({ status: "error", transcript: "", message: "Dein Browser unterstützt die Spracheingabe nicht. Bitte öffne die HTTPS-Vorschau in Safari." });
+  async function runCatalogSearch() {
+    const query = catalogQuery.trim();
+    if (!query) {
+      setCatalogSearch({ status: "error", query: "", message: "Gib mindestens einen Kartennamen ein – idealerweise mit Kartennummer." });
       return;
     }
-
-    const recognition = new Recognition();
-    let transcript = "";
-    recognition.lang = "de-DE";
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => setVoiceScan({ status: "listening", transcript: "", message: "Ich höre zu – nenne Kartenname, Nummer und Besonderheit." });
-    recognition.onresult = (event) => {
-      transcript = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
-      setVoiceScan({ status: "listening", transcript, message: "Ich höre zu – nenne Kartenname, Nummer und Besonderheit." });
-    };
-    recognition.onerror = (event) => setVoiceScan({ status: "error", transcript, message: event.error === "not-allowed" ? "Mikrofon wurde nicht freigegeben." : `Spracheingabe fehlgeschlagen: ${event.error}` });
-    recognition.onend = () => {
-      if (!transcript) return;
-      void (async () => {
-        const normalized = normalizeVoiceTranscript(transcript);
-        setVoiceScan({ status: "searching", transcript, normalized, message: "Pokémonbegriff und Kartennummer werden abgeglichen …" });
-        try {
-          let data = await searchCatalog(normalized);
-          if ((data.candidates?.length ?? 0) === 0 && normalized !== transcript) data = await searchCatalog(transcript);
-          const candidates = data.candidates ?? [];
-          setVoiceScan(candidates.length > 0 ? { status: "review", transcript, normalized, candidates, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", transcript, normalized, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Kein eindeutiger Treffer. Sage Name und Kartennummer noch einmal deutlich." });
-        } catch (error) {
-          setVoiceScan({ status: "error", transcript, normalized, message: error instanceof Error ? error.message : "Die Katalogsuche ist fehlgeschlagen." });
-        }
-      })();
-    };
-    recognition.start();
+    const normalized = normalizeCatalogQuery(query);
+    setCatalogSearch({ status: "searching", query, normalized, message: "Pokémonbegriff und Kartennummer werden abgeglichen …" });
+    try {
+      let data = await searchCatalog(normalized);
+      if ((data.candidates?.length ?? 0) === 0 && normalized !== query) data = await searchCatalog(query);
+      const candidates = data.candidates ?? [];
+      setCatalogSearch(candidates.length > 0 ? { status: "review", query, normalized, candidates, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", query, normalized, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Kein eindeutiger Treffer. Prüfe Kartenname und Kartennummer." });
+    } catch (error) {
+      setCatalogSearch({ status: "error", query, normalized, message: error instanceof Error ? error.message : "Die Katalogsuche ist fehlgeschlagen." });
+    }
   }
 
   return (
@@ -272,8 +241,8 @@ export default function Home() {
             <div className="scan-icon" aria-hidden="true"><span /></div><h3>Direkt Karte scannen</h3><p>Öffnet die Rückkamera – halte die Karte hochkant ins Bild. Valoreon liest gezielt den Namen oben und die Nummer unten.</p>
             <div className="scan-actions"><label className="primary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" capture="environment" onClick={onCameraOpened} onInput={onFileSelected} onChange={onFileSelected} />Kamera öffnen</label><label className="secondary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" multiple onClick={() => setScanNotice("Mediathek geöffnet – nach der Auswahl startet die Erkennung automatisch.")} onInput={onFileSelected} onChange={onFileSelected} />Aus Galerie</label></div><small>Kamera: eine Karte · Galerie: bis zu 50 Bilder</small>
           </div>
-          <div className="voice-panel"><div><b>Oder per Stimme</b><p>Sag Name, Nummer und Besonderheit. Zum Beispiel: „Glurak, vier von einhundertzwei, Base Set, Holo.“</p></div><button className="voice-button" type="button" onClick={startVoiceScan}>{voiceScan?.status === "listening" ? "Ich höre zu …" : "🎙️ Spracheingabe"}</button></div>
-          {voiceScan && <div className={`voice-result voice-${voiceScan.status}`} aria-live="polite"><p className="scan-state">{voiceScan.status === "listening" ? "Spracheingabe läuft" : voiceScan.status === "searching" ? "Katalogsuche läuft" : voiceScan.status === "review" ? "Treffer prüfen" : voiceScan.status === "confirmed" ? "Karte bestätigt" : "Spracheingabe braucht Hilfe"}</p><p className="scan-message">{voiceScan.message}</p>{voiceScan.transcript && <p className="voice-transcript">Gesagt: „{voiceScan.transcript}“</p>}{voiceScan.normalized && voiceScan.normalized !== voiceScan.transcript && <p className="voice-normalized">Abgleich: {voiceScan.normalized.replace(/\n/g, " · ")}</p>}{voiceScan.hints && <p className="scan-hints">Erkannt: {voiceScan.hints.name ?? "Name unklar"}{voiceScan.hints.number ? ` · ${voiceScan.hints.number}` : ""}</p>}{voiceScan.status === "review" && <div className="candidate-list">{voiceScan.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => setVoiceScan((current) => current ? { ...current, status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` } : current)}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{voiceScan.status === "confirmed" && voiceScan.selected && <div className="confirmed-card"><img src={voiceScan.selected.image} alt="" /><span><b>{voiceScan.selected.name}</b><small>{voiceScan.selected.setName} · {voiceScan.selected.number}{voiceScan.selected.setTotal ? `/${voiceScan.selected.setTotal}` : ""}</small></span></div>}</div>}
+          <div className="text-search-panel"><div><b>Katalog direkt testen</b><p>Tippe Kartenname und Kartennummer ein. Deutsche Pokémonnamen werden abgeglichen.</p></div><div className="text-search-controls"><input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runCatalogSearch(); }} placeholder="z. B. Glurak 4/102 Holo" aria-label="Kartenname und Kartennummer" /><button type="button" onClick={() => void runCatalogSearch()}>Karte suchen</button></div></div>
+          {catalogSearch && <div className={`text-search-result text-${catalogSearch.status}`} aria-live="polite"><p className="scan-state">{catalogSearch.status === "searching" ? "Katalogsuche läuft" : catalogSearch.status === "review" ? "Treffer prüfen" : catalogSearch.status === "confirmed" ? "Karte bestätigt" : "Suche braucht Hilfe"}</p><p className="scan-message">{catalogSearch.message}</p>{catalogSearch.query && <p className="text-query">Eingabe: „{catalogSearch.query}“</p>}{catalogSearch.normalized && catalogSearch.normalized !== catalogSearch.query && <p className="text-normalized">Abgleich: {catalogSearch.normalized.replace(/\n/g, " · ")}</p>}{catalogSearch.hints && <p className="scan-hints">Erkannt: {catalogSearch.hints.name ?? "Name unklar"}{catalogSearch.hints.number ? ` · ${catalogSearch.hints.number}` : ""}</p>}{catalogSearch.status === "review" && <div className="candidate-list">{catalogSearch.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => setCatalogSearch((current) => current ? { ...current, status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` } : current)}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{catalogSearch.status === "confirmed" && catalogSearch.selected && <div className="confirmed-card"><img src={catalogSearch.selected.image} alt="" /><span><b>{catalogSearch.selected.name}</b><small>{catalogSearch.selected.setName} · {catalogSearch.selected.number}{catalogSearch.selected.setTotal ? `/${catalogSearch.selected.setTotal}` : ""}</small></span></div>}</div>}
           {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Scan" : "Scans"}</b><span>Erkennung läuft direkt auf deinem Bild</span></div><p className="scan-feedback" role="status"><span>✓</span> Foto angekommen – Kartenname und Nummer werden jetzt gelesen.</p><div className="scan-list">{uploads.map((upload) => <article className={`scan-result scan-${upload.status}`} key={upload.id}><div className="scan-preview"><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></div><div className="scan-content"><p className="scan-state">{upload.status === "reading" ? `Scan läuft${upload.progress ? ` · ${upload.progress}%` : ""}` : upload.status === "review" ? "Treffer prüfen" : upload.status === "confirmed" ? "Karte bestätigt" : "Scan braucht Hilfe"}</p><p className="scan-message">{upload.message}</p>{upload.hints && <p className="scan-hints">Gelesen: {upload.hints.name ?? "Name unklar"}{upload.hints.number ? ` · ${upload.hints.number}` : ""}</p>}{upload.status === "review" && <div className="candidate-list">{upload.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => updateUpload(upload.id, { status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` })}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{upload.status === "confirmed" && upload.selected && <div className="confirmed-card"><img src={upload.selected.image} alt="" /><span><b>{upload.selected.name}</b><small>{upload.selected.setName} · {upload.selected.number}{upload.selected.setTotal ? `/${upload.selected.setTotal}` : ""}</small></span></div>}</div></article>)}</div></div>}
         </div>
       </section>
