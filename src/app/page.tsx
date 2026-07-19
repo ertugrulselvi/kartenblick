@@ -41,7 +41,9 @@ export default function Home() {
           <p className="eyebrow">Pokémon-Karten verstehen</p>
           <h1>Deine Karten.<br /><em>Ihr Marktwert.</em></h1>
           <p className="hero-text">Foto hochladen, Karte erkennen lassen, Preise einordnen. Klar, schnell und mit dem nötigen Kontext.</p>
-          <a className="text-link" href="#scanner">Karte scannen <span>↓</span></a>
+          <button className="text-link" type="button" onClick={() => picker.current?.click()}>
+            Jetzt Karte scannen <span>↗</span>
+          </button>
         </div>
         <div className="hero-art" aria-label="Stilisierte Pokémon-Karte">
           <div className="orb orb-one" /><div className="orb orb-two" />
