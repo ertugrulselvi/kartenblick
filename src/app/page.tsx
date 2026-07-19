@@ -5,9 +5,9 @@ import { ChangeEvent, useRef, useState } from "react";
 type Upload = { id: string; name: string; preview: string };
 
 const benefits = [
-  ["01", "Foto aufnehmen", "Direkt mit der Kamera oder aus deiner Galerie."],
-  ["02", "Karte bestätigen", "Name, Set und Kartennummer sicher zuordnen."],
-  ["03", "Preise verstehen", "Marktdaten mit Quelle, Zeitpunkt und Kontext."],
+  ["01", "CM-Preis checken", "Low, Trend und Variante als Basis für deinen Trade."],
+  ["02", "Last Sold vergleichen", "Sieh, was die Karte zuletzt wirklich gebracht hat."],
+  ["03", "Tauschwert einschätzen", "Erkenne schnell, ob ein Angebot unter CM liegt."],
 ];
 
 export default function Home() {
@@ -38,9 +38,9 @@ export default function Home() {
 
       <section className="hero" id="oben">
         <div className="hero-copy">
-          <p className="eyebrow">Pokémon-Karten verstehen</p>
-          <h1>Deine Karten.<br /><em>Ihr Marktwert.</em></h1>
-          <p className="hero-text">Foto hochladen, Karte erkennen lassen, Preise einordnen. Klar, schnell und mit dem nötigen Kontext.</p>
+          <p className="eyebrow">Für Trades · Binder · Flohmarkt</p>
+          <h1>Deine Karten.<br /><em>Dein Tauschwert.</em></h1>
+          <p className="hero-text">CM-Preise, Last Sold und Tauschwert auf einen Blick. Damit du weißt, ob dein Deal unter CM liegt.</p>
           <button className="text-link" type="button" onClick={() => picker.current?.click()}>
             Jetzt Karte scannen <span>↗</span>
           </button>
@@ -53,7 +53,7 @@ export default function Home() {
       </section>
 
       <section className="scanner-section" id="scanner">
-        <div className="section-heading"><p className="eyebrow">MVP · Scan starten</p><h2>Welche Karte<br />möchtest du prüfen?</h2><p>Ein Foto oder bis zu 50 Bilder auswählen. Die Erkennung wird im nächsten Schritt angebunden.</p></div>
+        <div className="section-heading"><p className="eyebrow">MVP · Scan starten</p><h2>Ist dein Trade<br />unter CM?</h2><p>Scanne eine Karte und prüfe CM-Preise, Last Sold und deinen möglichen Tauschwert.</p></div>
         <div className="scanner-panel">
           <input ref={picker} className="visually-hidden" type="file" accept="image/*" capture="environment" multiple onChange={onInput} />
           <div className={`dropzone ${dragging ? "is-dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}>
@@ -65,7 +65,7 @@ export default function Home() {
       </section>
 
       <section className="how-it-works" id="so-funktionierts"><p className="eyebrow">Einfacher Ablauf</p><div className="steps">{benefits.map(([number, title, text]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
-      <section className="price-note" id="ueber"><p className="eyebrow">Transparente Daten</p><h2>Ein Preis ist erst mit seinem<br /><em>Kontext</em> etwas wert.</h2><p>Kartenblick zeigt Quelle, Abrufzeit, Sprache und Variante. Marktdaten sind Orientierung – kein verbindlicher Ankaufspreis.</p></section>
+      <section className="price-note" id="ueber"><p className="eyebrow">CM ist die Basis</p><h2>Nicht nur CM.<br /><em>Dein Tauschwert.</em></h2><p>Kartenblick zeigt CM-Preise, Last Sold, Quelle, Abrufzeit, Sprache und Variante. So erkennst du faire Trades und Angebote unter CM.</p></section>
       <footer><a className="brand" href="#oben"><span className="brand-mark">K</span><span>kartenblick</span></a><span>© 2026 Kartenblick · MVP</span></footer>
     </main>
   );
