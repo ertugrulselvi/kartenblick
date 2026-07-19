@@ -2,7 +2,28 @@
 
 import { ChangeEvent, useRef, useState } from "react";
 
-type Upload = { id: string; name: string; preview: string };
+type CardCandidate = {
+  id: string;
+  name: string;
+  number: string;
+  setName: string;
+  setTotal?: number;
+  rarity?: string;
+  image?: string;
+};
+
+type Upload = {
+  id: string;
+  name: string;
+  preview: string;
+  file: File;
+  status: "ready" | "reading" | "review" | "confirmed" | "error";
+  progress?: number;
+  hints?: { name?: string; number?: string };
+  candidates?: CardCandidate[];
+  selected?: CardCandidate;
+  message?: string;
+};
 
 const benefits = [
   ["01", "CM-Preis checken", "Low, Trend und Variante als Basis für deinen Trade."],
@@ -15,13 +36,47 @@ export default function Home() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
 
+  function updateUpload(id: string, changes: Partial<Upload>) {
+    setUploads((current) => current.map((upload) => upload.id === id ? { ...upload, ...changes } : upload));
+  }
+
+  async function scanUpload(upload: Upload) {
+    updateUpload(upload.id, { status: "reading", progress: 0, message: "Text wird von der Karte gelesen …" });
+    try {
+      const { recognize } = await import("tesseract.js");
+      const result = await recognize(upload.file, "eng", {
+        logger: (event) => {
+          if (event.status === "recognizing text" && typeof event.progress === "number") {
+            updateUpload(upload.id, { progress: Math.round(event.progress * 100), message: "Kartentext wird gelesen …" });
+          }
+        },
+      });
+      const text = result.data.text.trim();
+      if (text.length < 3) throw new Error("Auf dem Bild war zu wenig Text lesbar.");
+      updateUpload(upload.id, { progress: 100, message: "Katalog wird durchsucht …" });
+
+      const response = await fetch("/api/cards/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      const data = await response.json() as { candidates?: CardCandidate[]; hints?: { number?: string; names?: string[] }; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Die Katalogsuche konnte nicht gestartet werden.");
+      const candidates = data.candidates ?? [];
+      updateUpload(upload.id, candidates.length > 0 ? {
+        status: "review", candidates, hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Bitte bestätige die passende Karte.",
+      } : {
+        status: "error", hints: { name: data.hints?.names?.[0], number: data.hints?.number }, message: "Kein sicherer Treffer. Fotografiere Name und Kartennummer möglichst scharf.",
+      });
+    } catch (error) {
+      updateUpload(upload.id, { status: "error", message: error instanceof Error ? error.message : "Die Erkennung ist fehlgeschlagen." });
+    }
+  }
+
   function addFiles(files: FileList | null) {
     if (!files) return;
     const next = Array.from(files)
       .filter((file) => file.type.startsWith("image/"))
       .slice(0, 50 - uploads.length)
-      .map((file) => ({ id: `${file.name}-${file.lastModified}-${Math.random()}`, name: file.name, preview: URL.createObjectURL(file) }));
+      .map((file) => ({ id: `${file.name}-${file.lastModified}-${Math.random()}`, name: file.name, preview: URL.createObjectURL(file), file, status: "ready" as const }));
     setUploads((current) => [...current, ...next].slice(0, 50));
+    next.forEach((upload) => void scanUpload(upload));
   }
 
   function onInput(event: ChangeEvent<HTMLInputElement>) {
@@ -60,7 +115,7 @@ export default function Home() {
             <div className="scan-icon" aria-hidden="true"><span /></div><h3>Foto hier ablegen</h3><p>oder nimm eines mit der Kamera auf</p>
             <button className="primary-button" type="button" onClick={() => picker.current?.click()}>Foto auswählen</button><small>JPG, PNG oder HEIC · maximal 50 Bilder</small>
           </div>
-          {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Bild" : "Bilder"} bereit</b><span>Erkennung folgt im nächsten MVP-Schritt</span></div><div className="upload-grid">{uploads.map((upload) => <figure key={upload.id}><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></figure>)}</div></div>}
+          {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Scan" : "Scans"}</b><span>Erkennung läuft direkt auf deinem Bild</span></div><div className="scan-list">{uploads.map((upload) => <article className={`scan-result scan-${upload.status}`} key={upload.id}><div className="scan-preview"><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></div><div className="scan-content"><p className="scan-state">{upload.status === "reading" ? `Scan läuft${upload.progress ? ` · ${upload.progress}%` : ""}` : upload.status === "review" ? "Treffer prüfen" : upload.status === "confirmed" ? "Karte bestätigt" : "Scan braucht Hilfe"}</p><p className="scan-message">{upload.message}</p>{upload.hints && <p className="scan-hints">Gelesen: {upload.hints.name ?? "Name unklar"}{upload.hints.number ? ` · ${upload.hints.number}` : ""}</p>}{upload.status === "review" && <div className="candidate-list">{upload.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => updateUpload(upload.id, { status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` })}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{upload.status === "confirmed" && upload.selected && <div className="confirmed-card"><img src={upload.selected.image} alt="" /><span><b>{upload.selected.name}</b><small>{upload.selected.setName} · {upload.selected.number}{upload.selected.setTotal ? `/${upload.selected.setTotal}` : ""}</small></span></div>}</div></article>)}</div></div>}
         </div>
       </section>
 
