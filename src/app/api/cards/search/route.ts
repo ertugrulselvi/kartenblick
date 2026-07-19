@@ -49,8 +49,10 @@ function rankCard(card: PokemonCard, names: string[], number?: string) {
   const exactName = names.some((name) => name.toLowerCase() === cardName);
   const containedName = names.some((name) => cardName.includes(name.toLowerCase()) || name.toLowerCase().includes(cardName));
   const numberOnly = number?.split("/")[0];
+  const setTotal = number?.split("/")[1];
   const numberMatch = Boolean(numberOnly && card.number.replace(/^0+/, "") === numberOnly.replace(/^0+/, ""));
-  return (numberMatch ? 100 : 0) + (exactName ? 40 : 0) + (containedName ? 15 : 0);
+  const totalMatch = Boolean(setTotal && String(card.set.printedTotal ?? card.set.total) === setTotal);
+  return (numberMatch ? 100 : 0) + (totalMatch ? 80 : 0) + (exactName ? 40 : 0) + (containedName ? 15 : 0);
 }
 
 export async function POST(request: Request) {
@@ -65,14 +67,21 @@ export async function POST(request: Request) {
     const headers: HeadersInit = { Accept: "application/json" };
     if (process.env.POKEMON_TCG_API_KEY) headers["X-Api-Key"] = process.env.POKEMON_TCG_API_KEY;
     const responses = await Promise.all(hints.names.slice(0, 5).map(async (name) => {
+      try {
       const url = new URL("https://api.pokemontcg.io/v2/cards");
-      url.searchParams.set("q", `name:\"${escapeQuery(name)}\"`);
-      url.searchParams.set("pageSize", "10");
+      const [number] = hints.number?.split("/") ?? [];
+      const filters = [`name:\"${escapeQuery(name)}\"`];
+      if (number) filters.push(`number:\"${escapeQuery(number)}\"`);
+      url.searchParams.set("q", filters.join(" "));
+      url.searchParams.set("pageSize", "30");
       url.searchParams.set("select", "id,name,number,rarity,set,images");
-      const response = await fetch(url, { headers, next: { revalidate: 86_400 } });
+      const response = await fetch(url, { headers, next: { revalidate: 86_400 }, signal: AbortSignal.timeout(8_000) });
       if (!response.ok) return [] as PokemonCard[];
       const data = (await response.json()) as { data?: PokemonCard[] };
       return data.data ?? [];
+      } catch {
+        return [] as PokemonCard[];
+      }
     }));
 
     const unique = new Map<string, CardCandidate>();

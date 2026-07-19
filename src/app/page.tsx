@@ -35,6 +35,29 @@ type CatalogSearch = {
   message: string;
 };
 
+type VoiceSearch = {
+  transcript: string;
+  normalized?: string;
+  status: "listening" | "searching" | "review" | "confirmed" | "error";
+  candidates?: CardCandidate[];
+  hints?: { name?: string; number?: string };
+  selected?: CardCandidate;
+  message: string;
+};
+
+type VoiceRecognition = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  onstart: (() => void) | null;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+type VoiceRecognitionConstructor = new () => VoiceRecognition;
+
 const benefits = [
   ["01", "CM-Preis checken", "Low, Trend und Variante als Basis für deinen Trade."],
   ["02", "Last Sold vergleichen", "Sieh, was die Karte zuletzt wirklich gebracht hat."],
@@ -42,7 +65,7 @@ const benefits = [
 ];
 
 const POKEMON_CATALOG_TERMS: Record<string, string> = {
-  bisaflor: "Venusaur", dragoran: "Dragonite", evoli: "Eevee", garados: "Gyarados", gengar: "Gengar", glurak: "Charizard", glurack: "Charizard", guardevoir: "Gardevoir", koraidon: "Koraidon", lucario: "Lucario", miraidon: "Miraidon", mewtu: "Mewtwo", pikachu: "Pikachu", rayquaza: "Rayquaza", turtok: "Blastoise",
+  bisaflor: "Venusaur", bisaknosp: "Ivysaur", bummelz: "Slakoth", dragoran: "Dragonite", dratini: "Dratini", evoli: "Eevee", flemli: "Torchic", garados: "Gyarados", gengar: "Gengar", geckarbor: "Treecko", gewaldro: "Sceptile", glurak: "Charizard", glurack: "Charizard", hydropi: "Mudkip", hydropie: "Mudkip", jungglut: "Combusken", koraidon: "Koraidon", lohgock: "Blaziken", lucario: "Lucario", miraidon: "Miraidon", mewtu: "Mewtwo", pikachu: "Pikachu", rayquaza: "Rayquaza", relaxo: "Snorlax", schiggy: "Squirtle", simsal: "Alakazam", sumpex: "Swampert", turtok: "Blastoise",
 };
 
 const GERMAN_NUMBER_WORDS: Record<string, number> = {
@@ -81,6 +104,22 @@ function normalizeCatalogQuery(query: string) {
   return normalized.replace(/\s*\/\s*/g, "/").replace(/\n{2,}/g, "\n").trim();
 }
 
+function editDistance(left: string, right: string) {
+  const table = Array.from({ length: left.length + 1 }, (_, row) => Array.from({ length: right.length + 1 }, (_, column) => row === 0 ? column : column === 0 ? row : 0));
+  for (let row = 1; row <= left.length; row += 1) for (let column = 1; column <= right.length; column += 1) table[row][column] = left[row - 1] === right[column - 1] ? table[row - 1][column - 1] : Math.min(table[row - 1][column], table[row][column - 1], table[row - 1][column - 1]) + 1;
+  return table[left.length][right.length];
+}
+
+function fuzzyPokemonTerms(query: string) {
+  const words = query.split(/(\s+)/);
+  return words.map((part) => {
+    const word = part.toLowerCase().replace(/[^a-zäöüß]/g, "");
+    if (word.length < 5 || POKEMON_CATALOG_TERMS[word]) return part;
+    const match = Object.keys(POKEMON_CATALOG_TERMS).find((term) => Math.abs(term.length - word.length) <= 1 && editDistance(term, word) <= 1);
+    return match ? POKEMON_CATALOG_TERMS[match] : part;
+  }).join("");
+}
+
 async function cropCardZone(file: File, zone: "name" | "number") {
   const source = URL.createObjectURL(file);
   try {
@@ -117,6 +156,7 @@ export default function Home() {
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogSearch, setCatalogSearch] = useState<CatalogSearch | null>(null);
+  const [voiceSearch, setVoiceSearch] = useState<VoiceSearch | null>(null);
 
   function updateUpload(id: string, changes: Partial<Upload>) {
     setUploads((current) => current.map((upload) => upload.id === id ? { ...upload, ...changes } : upload));
@@ -210,6 +250,51 @@ export default function Home() {
     }
   }
 
+  function startVoiceSearch() {
+    const speechWindow = window as typeof window & { SpeechRecognition?: VoiceRecognitionConstructor; webkitSpeechRecognition?: VoiceRecognitionConstructor };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setVoiceSearch({ status: "error", transcript: "", message: "Dein Browser unterstützt die Spracheingabe nicht. Nutze bitte Safari über die HTTPS-Vorschau." });
+      return;
+    }
+    const recognition = new Recognition();
+    let alternatives: string[] = [];
+    recognition.lang = "de-DE";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 3;
+    recognition.onstart = () => setVoiceSearch({ status: "listening", transcript: "", message: "Ich höre zu – sag Name, Nummer und Besonderheit." });
+    recognition.onresult = (event) => {
+      alternatives = Array.from(event.results).flatMap((result) => Array.from(result).map((item) => item.transcript.trim())).filter(Boolean);
+      setVoiceSearch({ status: "listening", transcript: alternatives[0] ?? "", message: "Ich höre zu – sag Name, Nummer und Besonderheit." });
+    };
+    recognition.onerror = (event) => setVoiceSearch({ status: "error", transcript: alternatives[0] ?? "", message: event.error === "not-allowed" ? "Mikrofon wurde nicht freigegeben." : `Spracheingabe fehlgeschlagen: ${event.error}` });
+    recognition.onend = () => {
+      if (alternatives.length === 0) return;
+      void (async () => {
+        const attempts = Array.from(new Set(alternatives.flatMap((spoken) => {
+          const fuzzy = fuzzyPokemonTerms(spoken);
+          const normalized = normalizeCatalogQuery(fuzzy);
+          return [normalized, spoken];
+        }))).filter(Boolean).slice(0, 6);
+        const transcript = alternatives[0];
+        setVoiceSearch({ status: "searching", transcript, normalized: attempts[0], message: "Pokémonbegriffe, Nummer und drei Sprachvarianten werden abgeglichen …" });
+        try {
+          let data: Awaited<ReturnType<typeof searchCatalog>> | undefined;
+          for (const attempt of attempts) {
+            const result = await searchCatalog(attempt);
+            data = result;
+            if ((result.candidates?.length ?? 0) > 0) break;
+          }
+          const candidates = data?.candidates ?? [];
+          setVoiceSearch(candidates.length > 0 ? { status: "review", transcript, normalized: attempts[0], candidates, hints: { name: data?.hints?.names?.[0], number: data?.hints?.number }, message: "Bitte bestätige die passende Karte." } : { status: "error", transcript, normalized: attempts[0], message: "Kein eindeutiger Treffer. Sage Name und Kartennummer noch einmal deutlich." });
+        } catch (error) {
+          setVoiceSearch({ status: "error", transcript, normalized: attempts[0], message: error instanceof Error ? error.message : "Die Katalogsuche ist fehlgeschlagen." });
+        }
+      })();
+    };
+    recognition.start();
+  }
+
   return (
     <main>
       <header className="site-header">
@@ -243,6 +328,8 @@ export default function Home() {
           </div>
           <div className="text-search-panel"><div><b>Katalog direkt testen</b><p>Tippe Kartenname und Kartennummer ein. Deutsche Pokémonnamen werden abgeglichen.</p></div><div className="text-search-controls"><input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runCatalogSearch(); }} placeholder="z. B. Glurak 4/102 Holo" aria-label="Kartenname und Kartennummer" /><button type="button" onClick={() => void runCatalogSearch()}>Karte suchen</button></div></div>
           {catalogSearch && <div className={`text-search-result text-${catalogSearch.status}`} aria-live="polite"><p className="scan-state">{catalogSearch.status === "searching" ? "Katalogsuche läuft" : catalogSearch.status === "review" ? "Treffer prüfen" : catalogSearch.status === "confirmed" ? "Karte bestätigt" : "Suche braucht Hilfe"}</p><p className="scan-message">{catalogSearch.message}</p>{catalogSearch.query && <p className="text-query">Eingabe: „{catalogSearch.query}“</p>}{catalogSearch.normalized && catalogSearch.normalized !== catalogSearch.query && <p className="text-normalized">Abgleich: {catalogSearch.normalized.replace(/\n/g, " · ")}</p>}{catalogSearch.hints && <p className="scan-hints">Erkannt: {catalogSearch.hints.name ?? "Name unklar"}{catalogSearch.hints.number ? ` · ${catalogSearch.hints.number}` : ""}</p>}{catalogSearch.status === "review" && <div className="candidate-list">{catalogSearch.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => setCatalogSearch((current) => current ? { ...current, status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` } : current)}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{catalogSearch.status === "confirmed" && catalogSearch.selected && <div className="confirmed-card"><img src={catalogSearch.selected.image} alt="" /><span><b>{catalogSearch.selected.name}</b><small>{catalogSearch.selected.setName} · {catalogSearch.selected.number}{catalogSearch.selected.setTotal ? `/${catalogSearch.selected.setTotal}` : ""}</small></span></div>}</div>}
+          <div className="voice-panel"><div><b>Oder per Stimme</b><p>Valoreon vergleicht bis zu drei Sprachvarianten mit Pokémonbegriffen und Kartennummern.</p></div><button className="voice-button" type="button" onClick={startVoiceSearch}>{voiceSearch?.status === "listening" ? "Ich höre zu …" : "🎙️ Spracheingabe"}</button></div>
+          {voiceSearch && <div className={`voice-result voice-${voiceSearch.status}`} aria-live="polite"><p className="scan-state">{voiceSearch.status === "listening" ? "Spracheingabe läuft" : voiceSearch.status === "searching" ? "Katalogsuche läuft" : voiceSearch.status === "review" ? "Treffer prüfen" : voiceSearch.status === "confirmed" ? "Karte bestätigt" : "Spracheingabe braucht Hilfe"}</p><p className="scan-message">{voiceSearch.message}</p>{voiceSearch.transcript && <p className="voice-transcript">Gesagt: „{voiceSearch.transcript}“</p>}{voiceSearch.normalized && voiceSearch.normalized !== voiceSearch.transcript && <p className="voice-normalized">Abgleich: {voiceSearch.normalized.replace(/\n/g, " · ")}</p>}{voiceSearch.hints && <p className="scan-hints">Erkannt: {voiceSearch.hints.name ?? "Name unklar"}{voiceSearch.hints.number ? ` · ${voiceSearch.hints.number}` : ""}</p>}{voiceSearch.status === "review" && <div className="candidate-list">{voiceSearch.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => setVoiceSearch((current) => current ? { ...current, status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` } : current)}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{voiceSearch.status === "confirmed" && voiceSearch.selected && <div className="confirmed-card"><img src={voiceSearch.selected.image} alt="" /><span><b>{voiceSearch.selected.name}</b><small>{voiceSearch.selected.setName} · {voiceSearch.selected.number}{voiceSearch.selected.setTotal ? `/${voiceSearch.selected.setTotal}` : ""}</small></span></div>}</div>}
           {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Scan" : "Scans"}</b><span>Erkennung läuft direkt auf deinem Bild</span></div><p className="scan-feedback" role="status"><span>✓</span> Foto angekommen – Kartenname und Nummer werden jetzt gelesen.</p><div className="scan-list">{uploads.map((upload) => <article className={`scan-result scan-${upload.status}`} key={upload.id}><div className="scan-preview"><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></div><div className="scan-content"><p className="scan-state">{upload.status === "reading" ? `Scan läuft${upload.progress ? ` · ${upload.progress}%` : ""}` : upload.status === "review" ? "Treffer prüfen" : upload.status === "confirmed" ? "Karte bestätigt" : "Scan braucht Hilfe"}</p><p className="scan-message">{upload.message}</p>{upload.hints && <p className="scan-hints">Gelesen: {upload.hints.name ?? "Name unklar"}{upload.hints.number ? ` · ${upload.hints.number}` : ""}</p>}{upload.status === "review" && <div className="candidate-list">{upload.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => updateUpload(upload.id, { status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` })}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{upload.status === "confirmed" && upload.selected && <div className="confirmed-card"><img src={upload.selected.image} alt="" /><span><b>{upload.selected.name}</b><small>{upload.selected.setName} · {upload.selected.number}{upload.selected.setTotal ? `/${upload.selected.setTotal}` : ""}</small></span></div>}</div></article>)}</div></div>}
         </div>
       </section>
