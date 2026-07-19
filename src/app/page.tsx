@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 
 type CardCandidate = {
   id: string;
@@ -81,11 +81,16 @@ export default function Home() {
     return next.length;
   }
 
-  function onFileSelected(event: ChangeEvent<HTMLInputElement>) {
+  function onFileSelected(event: ChangeEvent<HTMLInputElement> | FormEvent<HTMLInputElement>) {
+    if (!event.currentTarget.files?.length) return;
     const added = addFiles(event.currentTarget.files);
     event.currentTarget.value = "";
     setScanNotice(added > 0 ? "Foto angekommen – Karte wird gelesen." : "Das Foto wurde gewählt, aber das Format konnte nicht gelesen werden.");
     window.setTimeout(() => scanner.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+  }
+
+  function onCameraOpened() {
+    setScanNotice("Kamera geöffnet – nach dem Foto startet die Erkennung automatisch.");
   }
 
   return (
@@ -101,7 +106,7 @@ export default function Home() {
           <h1>Deine Karten.<br /><em>Dein Tauschwert.</em></h1>
           <p className="hero-text">CM-Preise, Last Sold und Tauschwert auf einen Blick. Damit du weißt, ob dein Deal unter CM liegt.</p>
           <label className="text-link file-trigger">
-            <input className="native-file-input" type="file" accept="image/*,.heic,.heif" capture="environment" onChange={onFileSelected} />
+            <input className="native-file-input" type="file" accept="image/*,.heic,.heif" capture="environment" onClick={onCameraOpened} onInput={onFileSelected} onChange={onFileSelected} />
             Jetzt Karte scannen <span>↗</span>
           </label>
         </div>
@@ -117,7 +122,7 @@ export default function Home() {
         <div className="scanner-panel">
           <div className={`dropzone ${dragging ? "is-dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}>
             <div className="scan-icon" aria-hidden="true"><span /></div><h3>Direkt Karte scannen</h3><p>Öffnet die Rückkamera – halte Name und Kartennummer ins Bild.</p>
-            <div className="scan-actions"><label className="primary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" capture="environment" onChange={onFileSelected} />Kamera öffnen</label><label className="secondary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" multiple onChange={onFileSelected} />Aus Galerie</label></div><small>Kamera: eine Karte · Galerie: bis zu 50 Bilder</small>
+            <div className="scan-actions"><label className="primary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" capture="environment" onClick={onCameraOpened} onInput={onFileSelected} onChange={onFileSelected} />Kamera öffnen</label><label className="secondary-button file-trigger"><input className="native-file-input" type="file" accept="image/*,.heic,.heif" multiple onClick={() => setScanNotice("Mediathek geöffnet – nach der Auswahl startet die Erkennung automatisch.")} onInput={onFileSelected} onChange={onFileSelected} />Aus Galerie</label></div><small>Kamera: eine Karte · Galerie: bis zu 50 Bilder</small>
           </div>
           {uploads.length > 0 && <div className="uploads" aria-live="polite"><div className="uploads-heading"><b>{uploads.length} {uploads.length === 1 ? "Scan" : "Scans"}</b><span>Erkennung läuft direkt auf deinem Bild</span></div><p className="scan-feedback" role="status"><span>✓</span> Foto angekommen – Kartenname und Nummer werden jetzt gelesen.</p><div className="scan-list">{uploads.map((upload) => <article className={`scan-result scan-${upload.status}`} key={upload.id}><div className="scan-preview"><img src={upload.preview} alt={upload.name} /><button type="button" onClick={() => setUploads((current) => current.filter((item) => item.id !== upload.id))} aria-label={`${upload.name} entfernen`}>×</button></div><div className="scan-content"><p className="scan-state">{upload.status === "reading" ? `Scan läuft${upload.progress ? ` · ${upload.progress}%` : ""}` : upload.status === "review" ? "Treffer prüfen" : upload.status === "confirmed" ? "Karte bestätigt" : "Scan braucht Hilfe"}</p><p className="scan-message">{upload.message}</p>{upload.hints && <p className="scan-hints">Gelesen: {upload.hints.name ?? "Name unklar"}{upload.hints.number ? ` · ${upload.hints.number}` : ""}</p>}{upload.status === "review" && <div className="candidate-list">{upload.candidates?.map((candidate) => <button className="candidate" key={candidate.id} type="button" onClick={() => updateUpload(upload.id, { status: "confirmed", selected: candidate, message: `${candidate.name} ist für die Preisprüfung vorgemerkt.` })}>{candidate.image && <img src={candidate.image} alt="" />}<span><b>{candidate.name}</b><small>{candidate.setName} · {candidate.number}{candidate.setTotal ? `/${candidate.setTotal}` : ""}</small></span><i>Auswählen</i></button>)}</div>}{upload.status === "confirmed" && upload.selected && <div className="confirmed-card"><img src={upload.selected.image} alt="" /><span><b>{upload.selected.name}</b><small>{upload.selected.setName} · {upload.selected.number}{upload.selected.setTotal ? `/${upload.selected.setTotal}` : ""}</small></span></div>}</div></article>)}</div></div>}
         </div>
